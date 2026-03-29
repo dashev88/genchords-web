@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { SavedProgression, ChordProgression } from "@/types/chord";
-import ChordDisplay from "@/components/ChordDisplay";
-import PianoRoll from "@/components/PianoRoll";
-import PlaybackControls from "@/components/PlaybackControls";
-import { downloadMidi } from "@/lib/midi";
 
 export default function DashboardPage() {
   const [progressions, setProgressions] = useState<SavedProgression[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeChordIndex, setActiveChordIndex] = useState(-1);
-  const [currentBeat, setCurrentBeat] = useState(0);
 
   useEffect(() => {
     fetch("/api/progressions")
@@ -23,21 +17,32 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    const res = await fetch(`/api/progressions/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setProgressions((prev) => prev.filter((p) => p.id !== id));
-      if (selectedId === id) setSelectedId(null);
-    }
-  }, [selectedId]);
+  const totalGenerations = progressions.length;
+  const recent = progressions.slice(0, 5);
+  const genreMap = new Map<string, number>();
+  const keyMap = new Map<string, number>();
 
-  const selected = progressions.find((p) => p.id === selectedId);
+  for (const p of progressions) {
+    const genre = p.parameters?.genre ?? "unknown";
+    genreMap.set(genre, (genreMap.get(genre) ?? 0) + 1);
+    const chords = p.chords as ChordProgression;
+    const key = chords?.key ?? "?";
+    keyMap.set(key, (keyMap.get(key) ?? 0) + 1);
+  }
+
+  const topGenre = [...genreMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  const topKey = [...keyMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
   return (
-    <div className="page-shell py-10 sm:py-12">
-      <div className="mb-6">
-        <p className="section-label mb-3">Dashboard</p>
-        <h1 className="text-2xl font-semibold tracking-[-0.04em]">Saved progressions</h1>
+    <div className="px-6 py-8 sm:px-8 lg:px-10">
+      <div className="mb-8">
+        <p className="section-label mb-2">Dashboard</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.04em]">
+          Welcome back
+        </h1>
+        <p className="mt-1 text-sm text-[var(--text-soft)]">
+          Here&apos;s an overview of your creative workspace.
+        </p>
       </div>
 
       {loading ? (
@@ -47,95 +52,151 @@ export default function DashboardPage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         </div>
-      ) : progressions.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-[var(--text-soft)]">No saved progressions yet.</p>
-          <a href="/generate" className="button-primary mt-4 inline-block px-4 py-2 text-sm font-medium">
-            Generate your first
-          </a>
-        </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-          <div className="surface-card max-h-[calc(100vh-12rem)] space-y-1.5 overflow-y-auto p-2">
-            {progressions.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => {
-                  setSelectedId(p.id);
-                  setActiveChordIndex(-1);
-                  setCurrentBeat(0);
-                }}
-                className={`cursor-pointer rounded-2xl border p-3 transition-all ${
-                  selectedId === p.id
-                    ? "border-[var(--foreground)] bg-[rgba(20,20,20,0.06)]"
-                    : "border-[var(--border)] bg-[rgba(255,255,255,0.015)] hover:border-[var(--border-strong)]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-sm truncate">{p.name}</h3>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(p.id);
-                    }}
-                    className="text-[var(--text-faint)] transition-colors hover:text-red-400"
-                    title="Delete"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-                <p className="mt-1 truncate text-[10px] text-[var(--text-faint)]">
-                  &quot;{p.prompt}&quot;
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--text-faint)]/80">
-                  {new Date(p.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
+        <>
+          {/* Stats row */}
+          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+            <div className="surface-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                Total Generations
+              </p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight">
+                {totalGenerations}
+              </p>
+            </div>
+            <div className="surface-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                Top Genre
+              </p>
+              <p className="mt-2 text-3xl font-semibold capitalize tracking-tight">
+                {topGenre}
+              </p>
+            </div>
+            <div className="surface-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                Favorite Key
+              </p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight">
+                {topKey}
+              </p>
+            </div>
           </div>
 
-          {selected ? (
-            <div className="space-y-4 min-w-0">
-              <div className="surface-card p-5 sm:p-6">
-                <PlaybackControls
-                  progression={selected.chords as ChordProgression}
-                  onChordChange={setActiveChordIndex}
-                  onBeatChange={setCurrentBeat}
-                />
-                <div className="mt-5">
-                  <ChordDisplay
-                    progression={selected.chords as ChordProgression}
-                    activeChordIndex={activeChordIndex}
-                  />
-                </div>
-                <div className="mt-5">
-                  <PianoRoll
-                    progression={selected.chords as ChordProgression}
-                    activeChordIndex={activeChordIndex}
-                    currentBeat={currentBeat}
-                  />
-                </div>
+          {/* Quick actions */}
+          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+            <Link
+              href="/dashboard/generate"
+              className="surface-card group flex items-center gap-4 p-5 transition-all hover:border-[var(--border-strong)]"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--foreground)] text-[var(--background)]">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                </svg>
               </div>
-              <button
-                onClick={() =>
-                  downloadMidi(
-                    selected.chords as ChordProgression,
-                    `${selected.name}.mid`
-                  )
-                }
-                className="button-secondary px-3 py-1.5 text-xs font-medium"
-              >
-                Download MIDI
-              </button>
+              <div>
+                <h3 className="text-sm font-semibold group-hover:text-[var(--foreground)]">
+                  New Generation
+                </h3>
+                <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                  Create a chord progression with AI
+                </p>
+              </div>
+              <svg className="ml-auto h-4 w-4 text-[var(--text-faint)] transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </Link>
+
+            <Link
+              href="/dashboard/history"
+              className="surface-card group flex items-center gap-4 p-5 transition-all hover:border-[var(--border-strong)]"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.6)]">
+                <svg className="h-5 w-5 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold group-hover:text-[var(--foreground)]">
+                  Browse History
+                </h3>
+                <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                  View and manage all saved progressions
+                </p>
+              </div>
+              <svg className="ml-auto h-4 w-4 text-[var(--text-faint)] transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* Recent generations */}
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold tracking-[-0.03em]">
+                Recent Generations
+              </h2>
+              {progressions.length > 5 && (
+                <Link
+                  href="/dashboard/history"
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                >
+                  View all →
+                </Link>
+              )}
             </div>
-          ) : (
-            <div className="surface-card flex items-center justify-center py-20">
-              <p className="text-sm text-[var(--text-faint)]">Select a progression to preview</p>
-            </div>
-          )}
-        </div>
+
+            {recent.length === 0 ? (
+              <div className="surface-card py-12 text-center">
+                <p className="text-sm text-[var(--text-soft)]">
+                  No generations yet
+                </p>
+                <Link
+                  href="/dashboard/generate"
+                  className="button-primary mt-4 inline-block px-5 py-2 text-sm font-medium"
+                >
+                  Create your first
+                </Link>
+              </div>
+            ) : (
+              <div className="surface-card overflow-hidden">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-[10px] uppercase tracking-[0.18em] text-[var(--text-faint)]">
+                      <th className="px-4 py-3 font-medium">Name</th>
+                      <th className="hidden px-4 py-3 font-medium sm:table-cell">Prompt</th>
+                      <th className="hidden px-4 py-3 font-medium md:table-cell">Key</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.map((p) => {
+                      const chords = p.chords as ChordProgression;
+                      return (
+                        <tr
+                          key={p.id}
+                          className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]"
+                        >
+                          <td className="max-w-[12rem] truncate px-4 py-3 font-medium">
+                            {p.name}
+                          </td>
+                          <td className="hidden max-w-[16rem] truncate px-4 py-3 text-[var(--text-muted)] sm:table-cell">
+                            {p.prompt}
+                          </td>
+                          <td className="hidden px-4 py-3 text-[var(--text-muted)] md:table-cell">
+                            {chords?.key} {chords?.scale}
+                          </td>
+                          <td className="px-4 py-3 text-[var(--text-faint)]">
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

@@ -35,6 +35,12 @@ export default function Navbar() {
     { href: "/faq", label: "FAQ" },
   ];
 
+  const dashboardLinks = [
+    { href: "/dashboard", label: "Overview" },
+    { href: "/dashboard/generate", label: "Generate" },
+    { href: "/dashboard/history", label: "History" },
+  ];
+
   return (
     <nav className="sticky top-4 z-50">
       <div className="page-shell">
@@ -60,34 +66,33 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user && (
-              <Link
-                href="/dashboard"
-                className="text-sm text-[var(--text-muted)] hover:text-[var(--foreground)]"
-              >
-                Dashboard
-              </Link>
-            )}
           </div>
 
           <div className="flex items-center justify-self-end gap-3">
             {user ? (
               <div className="hidden items-center gap-3 sm:flex">
-                <span className="max-w-[14rem] truncate text-sm text-[var(--text-faint)]">{user.email}</span>
-                <button
-                  onClick={handleSignOut}
-                  className="text-sm text-[var(--text-soft)] hover:text-[var(--foreground)]"
+                <Link
+                  href="/dashboard"
+                  className="button-primary px-4 py-2 text-sm font-medium"
                 >
-                  Sign out
-                </button>
+                  Dashboard
+                </Link>
               </div>
             ) : (
-              <Link
-                href="/generate"
-                className="button-secondary hidden px-4 py-2 text-sm font-medium sm:inline-flex"
-              >
-                Get Started
-              </Link>
+              <div className="hidden items-center gap-3 sm:flex">
+                <Link
+                  href="/auth/login"
+                  className="text-sm text-[var(--text-soft)] hover:text-[var(--foreground)]"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/auth/login"
+                  className="button-primary px-4 py-2 text-sm font-medium"
+                >
+                  Get Started
+                </Link>
+              </div>
             )}
 
             <button
@@ -120,29 +125,33 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            <div className="border-t border-[var(--border)] pt-3 mt-1" />
             {user ? (
               <>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMobileOpen(false)}
-                  className="block text-sm text-[var(--text-soft)] hover:text-[var(--foreground)]"
-                >
-                  Dashboard
-                </Link>
+                {dashboardLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="block text-sm text-[var(--text-soft)] hover:text-[var(--foreground)]"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
                 <button
                   onClick={handleSignOut}
-                  className="text-left text-sm text-[var(--text-soft)] hover:text-[var(--foreground)]"
+                  className="text-left text-sm text-[var(--text-faint)] hover:text-[var(--foreground)]"
                 >
                   Sign out
                 </button>
               </>
             ) : (
               <Link
-                href="/generate"
+                href="/auth/login"
                 onClick={() => setMobileOpen(false)}
-                className="block text-sm text-[var(--foreground)]"
+                className="block text-sm font-medium text-[var(--foreground)]"
               >
-                Get Started
+                Sign in / Get Started
               </Link>
             )}
           </div>

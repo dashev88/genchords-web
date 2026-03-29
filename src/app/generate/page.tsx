@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import GenerationForm from "@/components/GenerationForm";
 import ChordDisplay from "@/components/ChordDisplay";
 import PianoRoll from "@/components/PianoRoll";
 import PlaybackControls from "@/components/PlaybackControls";
 import { ChordProgression, GenerateRequest } from "@/types/chord";
-import { createClient } from "@/lib/supabase/client";
 
 const LOADING_CHORDS = ["Dm9", "G13", "Cmaj9", "Am11"];
 const LOADING_NOTES = [
@@ -24,24 +24,19 @@ const LOADING_NOTES = [
   { left: "74%", top: "64%", width: "12%", delay: "1.48s" },
 ];
 
-export default function GeneratePage() {
-  const [progressions, setProgressions] = useState<ChordProgression[]>([]);
-  const [selectedVariation, setSelectedVariation] = useState(0);
-  const [params, setParams] = useState<GenerateRequest | null>(null);
+export default function GenerateTrialPage() {
+  const [progression, setProgression] = useState<ChordProgression | null>(null);
   const [activeChordIndex, setActiveChordIndex] = useState(-1);
   const [currentBeat, setCurrentBeat] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   const handleGenerate = useCallback(
-    (progs: ChordProgression[], p: GenerateRequest) => {
-      setProgressions(progs);
-      setSelectedVariation(0);
-      setParams(p);
+    (progs: ChordProgression[], _p: GenerateRequest) => {
+      setProgression(progs[0] || null);
       setActiveChordIndex(-1);
       setCurrentBeat(0);
-      setSaveMessage("");
+      setHasGenerated(true);
     },
     []
   );
@@ -54,68 +49,31 @@ export default function GeneratePage() {
     setCurrentBeat(beat);
   }, []);
 
-  const handleTempoChange = useCallback((tempo: number) => {
-    setProgressions((prev) => prev.map((item, index) => (
-      index === selectedVariation
-        ? { ...item, tempo }
-        : item
-    )));
-    setCurrentBeat(0);
-    setActiveChordIndex(-1);
-    setSaveMessage("");
-  }, [selectedVariation]);
-
-  const handleSave = useCallback(async () => {
-    const progression = progressions[selectedVariation];
-    if (!progression || !params) return;
-
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setSaveMessage("Sign in to save progressions");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch("/api/progressions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `${progression.key} ${progression.scale} - ${params.genre}`,
-          prompt: params.prompt,
-          parameters: { ...params, tempo: progression.tempo },
-          chords: progression,
-        }),
-      });
-
-      if (res.ok) {
-        setSaveMessage("Saved!");
-      } else {
-        const data = await res.json();
-        setSaveMessage(data.error || "Failed to save");
-      }
-    } catch {
-      setSaveMessage("Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }, [progressions, selectedVariation, params]);
-
-  const progression = progressions[selectedVariation] || null;
-
   return (
     <div className="page-shell py-10 sm:py-12">
+      {/* Trial banner */}
+      <div className="surface-card-muted mb-8 flex flex-col items-start gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium">Try the generator</p>
+          <p className="mt-0.5 text-xs text-[var(--text-soft)]">
+            This is a preview with basic options. Sign in for the full experience with history, MIDI export, and more.
+          </p>
+        </div>
+        <Link
+          href="/auth/login"
+          className="button-primary shrink-0 px-5 py-2 text-sm font-medium"
+        >
+          Sign in for full access
+        </Link>
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-[380px_1fr]">
         <div className="space-y-4">
           <div className="surface-card p-6">
-            <p className="section-label mb-3">Generate</p>
+            <p className="section-label mb-3">Try it</p>
             <h1 className="text-2xl font-semibold tracking-[-0.04em]">Build a progression</h1>
             <p className="mt-1 text-sm text-[var(--text-soft)]">
-              Describe your vision and set parameters
+              Describe your vision and listen to the result
             </p>
           </div>
           <div className="surface-card p-5 sm:p-6">
@@ -131,101 +89,54 @@ export default function GeneratePage() {
                   <p className="section-label mb-2">Generating</p>
                   <h2 className="text-xl font-semibold tracking-[-0.04em]">Building harmonic options from your prompt</h2>
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--text-soft)]">
-                    GenChords is sketching voicings, testing movement, and shaping variations. You keep the idea, the taste, and the final call.
+                    GenChords is sketching voicings, testing movement, and shaping variations.
                   </p>
                 </div>
-                <div className="chip px-3 py-1.5 text-[11px]">AI as inspiration</div>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-                <div className="surface-card-muted p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-faint)]">Progress</p>
-                    <span className="generation-status text-xs text-[var(--text-faint)]">Drafting loop</span>
-                  </div>
-
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {LOADING_CHORDS.map((chord, index) => (
-                      <span
-                        key={chord}
-                        className="generation-chip rounded-full border px-3 py-1.5 text-xs font-medium"
-                        style={{ animationDelay: `${index * 0.32}s` }}
-                      >
-                        {chord}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="generation-roll relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(241,239,234,0.94))] p-3">
-                    <div className="generation-grid-lines absolute inset-0" />
-                    {LOADING_NOTES.map((note, index) => (
-                      <span
-                        key={`${note.left}-${index}`}
-                        className="generation-note absolute h-3 rounded-md bg-[var(--foreground)]/84"
-                        style={{
-                          left: note.left,
-                          top: note.top,
-                          width: note.width,
-                          animationDelay: note.delay,
-                        }}
-                      />
-                    ))}
-                    <span className="generation-playhead absolute bottom-0 top-0 w-[2px] bg-[var(--foreground)]" />
-                  </div>
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.72)] px-3 py-3 text-xs text-[var(--text-soft)]">
-                      Interpreting mood
-                    </div>
-                    <div className="rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.72)] px-3 py-3 text-xs text-[var(--text-soft)]">
-                      Voicing chords
-                    </div>
-                    <div className="rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.72)] px-3 py-3 text-xs text-[var(--text-soft)]">
-                      Comparing variations
-                    </div>
-                  </div>
+              <div className="surface-card-muted p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-faint)]">Progress</p>
+                  <span className="generation-status text-xs text-[var(--text-faint)]">Drafting loop</span>
                 </div>
 
-                <div className="surface-card-muted p-4">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-faint)]">What happens next</p>
-                  <div className="mt-4 space-y-3 text-sm text-[var(--text-soft)]">
-                    <p>The AI proposes progressions, not finished songs.</p>
-                    <p>Preview them, keep what sparks an idea, and reshape the rest in your DAW.</p>
-                    <p>Export the MIDI when one variation feels worth developing.</p>
-                  </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {LOADING_CHORDS.map((chord, index) => (
+                    <span
+                      key={chord}
+                      className="generation-chip rounded-full border px-3 py-1.5 text-xs font-medium"
+                      style={{ animationDelay: `${index * 0.32}s` }}
+                    >
+                      {chord}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="generation-roll relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(241,239,234,0.94))] p-3">
+                  <div className="generation-grid-lines absolute inset-0" />
+                  {LOADING_NOTES.map((note, index) => (
+                    <span
+                      key={`${note.left}-${index}`}
+                      className="generation-note absolute h-3 rounded-md bg-[var(--foreground)]/84"
+                      style={{
+                        left: note.left,
+                        top: note.top,
+                        width: note.width,
+                        animationDelay: note.delay,
+                      }}
+                    />
+                  ))}
+                  <span className="generation-playhead absolute bottom-0 top-0 w-[2px] bg-[var(--foreground)]" />
                 </div>
               </div>
             </div>
           ) : progression ? (
             <>
-              {progressions.length > 1 && (
-                <div className="flex gap-1.5">
-                  {progressions.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setSelectedVariation(i);
-                        setActiveChordIndex(-1);
-                        setCurrentBeat(0);
-                      }}
-                      className={`px-3 py-1.5 text-xs font-medium ${
-                        selectedVariation === i
-                          ? "button-primary"
-                          : "button-secondary"
-                      }`}
-                    >
-                      Variation {i + 1}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="surface-card p-5 sm:p-6">
                 <PlaybackControls
                   progression={progression}
                   onChordChange={handleChordChange}
                   onBeatChange={handleBeatChange}
-                  onTempoChange={handleTempoChange}
                 />
                 <div className="mt-5">
                   <ChordDisplay
@@ -242,17 +153,20 @@ export default function GeneratePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="button-secondary px-3 py-1.5 text-xs font-medium disabled:opacity-30"
+              {/* CTA after generation */}
+              <div className="surface-card flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">Want to save this or export MIDI?</p>
+                  <p className="mt-0.5 text-xs text-[var(--text-soft)]">
+                    Create a free account to unlock saving, history, MIDI export, and more generation options.
+                  </p>
+                </div>
+                <Link
+                  href="/auth/login"
+                  className="button-primary shrink-0 px-5 py-2 text-sm font-medium"
                 >
-                  {saving ? "Saving..." : "Save to dashboard"}
-                </button>
-                {saveMessage && (
-                  <span className="text-xs text-[var(--text-faint)]">{saveMessage}</span>
-                )}
+                  Get started free
+                </Link>
               </div>
             </>
           ) : (
